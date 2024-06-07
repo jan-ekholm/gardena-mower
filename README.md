@@ -76,10 +76,12 @@ gardena/mower/SERIAL/operating_hours
 where `SERIAL` is the serial number of the mower. The server will listen to incoming commands on the topic
 `gardena/mower/SERIAL/command`. The recognized commands are:
 
-* `start_1h` to start the mower for 1 hour. 
-* `start_3h` to start the mower for 3 hours. 
-* `start_6h` to start the mower for 6 hours. 
-* `park` to park the mower.
+* `start_1h` starts the mower for 1 hour. 
+* `start_3h` starts the mower for 3 hours. 
+* `start_6h` starts the mower for 6 hours. 
+* `park` to park the mower until the next task is due (schedule).
+* `park_until_further_notice` parks the mower until further notice.
+* `automatic` resumes automatic operation.
 
 ## Logs
 

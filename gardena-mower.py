@@ -1,7 +1,7 @@
 import json
 from enum import StrEnum
 import logging.handlers
-from typing import Union, Optional
+from typing import Union, Optional, Dict
 
 import websocket
 import datetime
@@ -36,6 +36,7 @@ class MoverActivity(StrEnum):
     parked_timer = "PARKED_TIMER"
     parked_auto_timer = "PARKED_AUTOTIMER"
     parked_park_selected = "PARKED_PARK_SELECTED"
+    parked_autotimer = "PARKED_AUTOTIMER"
     cutting_extra = "OK_CUTTING_TIMER_OVERRIDDEN"
     paused = "PAUSED"
 
@@ -56,25 +57,31 @@ class BatteryState(StrEnum):
     ok = "OK"
 
 
+class RfLinkState(StrEnum):
+    unknown = "UNKNOWN"
+    online = "ONLINE"
+    offline = "OFFLINE"
+
+
 class Mover:
     def __init__(self):
         self.name = "UNKNOWN"
         self.serial = -1
         self.model_type = "UNKNOWN"
         self.state = "UNKNOWN"
-        self.activity: MoverActivity = MoverActivity.unknown
         self.battery_level = -1
-        self.battery_state: BatteryState = BatteryState.unknown
         self.rf_link_level = -1
-        self.rf_link_state = "UNKNOWN"
         self.operating_hours = -1
+        self.activity: MoverActivity = MoverActivity.unknown
+        self.battery_state: BatteryState = BatteryState.unknown
+        self.rf_link_state: RfLinkState = RfLinkState.unknown
         self.last_error_code: MoverError = MoverError.unknown
 
     def __str__(self):
         if self.last_error_code is not None:
-            return f"[name: {self.name}: model: {self.model_type}, serial: {self.serial}, activity: {self.activity.name}, battery state: {self.battery_state.name}, battery: {self.battery_level}%, rf state: {self.rf_link_state}, rf level: {self.rf_link_level}, error: {self.last_error_code.name}]"
+            return f"[name: {self.name}: model: {self.model_type}, serial: {self.serial}, activity: {self.activity.name}, battery state: {self.battery_state.name}, battery: {self.battery_level}%, rf state: {self.rf_link_state.name}, rf level: {self.rf_link_level}, error: {self.last_error_code.name}]"
 
-        return f"[name: {self.name}: model: {self.model_type}, serial: {self.serial}, activity: {self.activity.name}, battery state: {self.battery_state.name}, battery: {self.battery_level}%, rf state: {self.rf_link_state}, rf level: {self.rf_link_level}]"
+        return f"[name: {self.name}: model: {self.model_type}, serial: {self.serial}, activity: {self.activity.name}, battery state: {self.battery_state.name}, battery: {self.battery_level}%, rf state: {self.rf_link_state.name}, rf level: {self.rf_link_level}]"
 
 
 class MqttClient:
@@ -145,7 +152,11 @@ class MqttClient:
         logger.info(f"received command '{command}' for mower {serial}")
 
         if command == "park":
-            self.park_mover()
+            self.park_mover_until_next_task()
+        elif command == "park_until_further_notice":
+            self.park_mover_until_further_notice()
+        elif command == "automatic":
+            self.automatic_operation()
         elif command == "start_1h":
             self.start_mower(1)
         elif command == "start_3h":
@@ -176,37 +187,58 @@ class MqttClient:
     def on_connect_fail(self, client, userdata):
         logger.error("failed to connect to broker")
 
-    def park_mover(self):
-        headers = {
-            "Content-Type": "application/vnd.api+json",
-            "x-api-key": API_KEY,
-            "Authorization": "Bearer " + auth_token
-        }
-
+    def automatic_operation(self):
         data = {
             "data": {
                 "type": "MOWER_CONTROL",
                 "id": "random_id",
                 "attributes": {
-                    "command": "PARK_UNTIL_NEXT_TASK",
-                    "seconds": 0,
+                    "command": "START_DONT_OVERRIDE"
                 }
             }
         }
 
-        r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=headers, json=data)
+        r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=self.create_headers(), json=data)
         if r.status_code != 202:
             logger.error(f"failed to park mower, status code: {r.status_code}, {r.text}")
         else:
-            logger.info("mower sent park command")
+            logger.info("mower sent automatic operation command")
 
-    def start_mower(self, hours: int):
-        headers = {
-            "Content-Type": "application/vnd.api+json",
-            "x-api-key": API_KEY,
-            "Authorization": "Bearer " + auth_token
+    def park_mover_until_next_task(self):
+        data = {
+            "data": {
+                "type": "MOWER_CONTROL",
+                "id": "random_id",
+                "attributes": {
+                    "command": "PARK_UNTIL_NEXT_TASK"
+                }
+            }
         }
 
+        r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=self.create_headers(), json=data)
+        if r.status_code != 202:
+            logger.error(f"failed to park mower, status code: {r.status_code}, {r.text}")
+        else:
+            logger.info("mower sent park until next task command")
+
+    def park_mover_until_further_notice(self):
+        data = {
+            "data": {
+                "type": "MOWER_CONTROL",
+                "id": "random_id",
+                "attributes": {
+                    "command": "PARK_UNTIL_FURTHER_NOTICE"
+                }
+            }
+        }
+
+        r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=self.create_headers(), json=data)
+        if r.status_code != 202:
+            logger.error(f"failed to park mower, status code: {r.status_code}, {r.text}")
+        else:
+            logger.info("mower sent park until further notice command")
+
+    def start_mower(self, hours: int):
         data = {
             "data": {
                 "type": "MOWER_CONTROL",
@@ -218,11 +250,18 @@ class MqttClient:
             }
         }
 
-        r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=headers, json=data)
+        r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=self.create_headers(), json=data)
         if r.status_code != 202:
             logger.error(f"failed to park mower, status code: {r.status_code}, {r.text}")
         else:
             logger.info(f"mower sent start command, moving {hours} h")
+
+    def create_headers(self) -> Dict[str, str]:
+        return {
+            "Content-Type": "application/vnd.api+json",
+            "x-api-key": API_KEY,
+            "Authorization": "Bearer " + auth_token
+        }
 
 
 class WebSocketClient:
@@ -267,16 +306,22 @@ class WebSocketClient:
             self.mover.name = self.get_attribute_value(attributes, "name", "UNKNOWN")
             self.mover.serial = int(self.get_attribute_value(attributes, "serial", "-1"))
             self.mover.model_type = self.get_attribute_value(attributes, "modelType", "UNKNOWN")
-            battery_state_str = self.get_attribute_value(attributes, "batteryState", "UNKNOWN")
             self.mover.battery_level = int(self.get_attribute_value(attributes, "batteryLevel", "-1"))
             self.mover.rf_link_level = int(self.get_attribute_value(attributes, "rfLinkLevel", "-1"))
-            self.mover.rf_link_state = self.get_attribute_value(attributes, "rfLinkState", "UNKNOWN")
+            battery_state_str = self.get_attribute_value(attributes, "batteryState", "UNKNOWN")
+            rf_link_state_str = self.get_attribute_value(attributes, "rfLinkState", "UNKNOWN")
 
             try:
                 self.mover.battery_state = BatteryState(battery_state_str)
             except ValueError:
                 logger.error(f"unknown battery state: {battery_state_str}")
                 self.mover.battery_state = BatteryState.unknown
+
+            try:
+                self.mover.rf_link_state = RfLinkState(rf_link_state_str)
+            except ValueError:
+                logger.error(f"unknown rf link state: {rf_link_state_str}")
+                self.mover.rf_link_state = RfLinkState.unknown
 
             # publish all data
             self.publish_mower_data()
