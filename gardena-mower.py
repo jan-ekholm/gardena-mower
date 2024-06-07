@@ -13,9 +13,8 @@ import rich
 import paho.mqtt.client as paho
 
 # account specific values
-CLIENT_ID = config("CLIENT_ID")
-CLIENT_SECRET = config("CLIENT_SECRET")
 API_KEY = config("API_KEY")
+API_SECRET = config("API_SECRET")
 
 # other constants
 AUTHENTICATION_HOST = 'https://api.authentication.husqvarnagroup.dev'
@@ -366,7 +365,7 @@ def init_websocket() -> Optional[websocket.WebSocketApp]:
     """Set up the websocket connection to Gardena's server."""
     logger.debug("setting up websocket")
 
-    payload = {'grant_type': 'client_credentials', 'client_id': CLIENT_ID, 'client_secret': CLIENT_SECRET}
+    payload = {'grant_type': 'client_credentials', 'client_id': API_KEY, 'client_secret': API_SECRET}
 
     r = requests.post(f'{AUTHENTICATION_HOST}/v1/oauth2/token', data=payload)
     if r.status_code != 200:
