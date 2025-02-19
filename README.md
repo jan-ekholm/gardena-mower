@@ -29,7 +29,7 @@ Install all required packages:
 ```
 
 Create a file `.env` in the directory where you're running the script. It contains your
-secrets and various parameters. As an altrnative you can set the same variables as normal
+secrets and various parameters. As an alternative you can set the same variables as normal
 environment variables.
 
 ```

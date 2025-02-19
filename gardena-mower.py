@@ -49,6 +49,7 @@ class MoverError(StrEnum):
     no_loop_signal = "NO_LOOP_SIGNAL"
     off_hatch_closed = "OFF_HATCH_CLOSED"
     lifted = "LIFTED"
+    charging_system_problem = "CHARGING_SYSTEM_PROBLEM"
 
 
 class BatteryState(StrEnum):
@@ -200,7 +201,7 @@ class MqttClient:
 
         r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=self.create_headers(), json=data)
         if r.status_code != 202:
-            logger.error(f"failed to park mower, status code: {r.status_code}, {r.text}")
+            logger.error(f"failed to send command to mower, status code: {r.status_code}, {r.text}")
         else:
             logger.info("mower sent automatic operation command")
 
@@ -217,7 +218,7 @@ class MqttClient:
 
         r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=self.create_headers(), json=data)
         if r.status_code != 202:
-            logger.error(f"failed to park mower, status code: {r.status_code}, {r.text}")
+            logger.error(f"failed to send command to mower, status code: {r.status_code}, {r.text} {r.content}")
         else:
             logger.info("mower sent park until next task command")
 
@@ -234,7 +235,7 @@ class MqttClient:
 
         r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=self.create_headers(), json=data)
         if r.status_code != 202:
-            logger.error(f"failed to park mower, status code: {r.status_code}, {r.text}")
+            logger.error(f"failed to send command to mower, status code: {r.status_code}, {r.text}")
         else:
             logger.info("mower sent park until further notice command")
 
@@ -252,7 +253,7 @@ class MqttClient:
 
         r = requests.put(f'{SMART_HOST}/v1/command/{service_id}', headers=self.create_headers(), json=data)
         if r.status_code != 202:
-            logger.error(f"failed to park mower, status code: {r.status_code}, {r.text}")
+            logger.error(f"failed to send command to mower, status code: {r.status_code}, {r.text}")
         else:
             logger.info(f"mower sent start command, moving {hours} h")
 
@@ -408,7 +409,7 @@ def init_logger():
 
 def init_websocket() -> Optional[websocket.WebSocketApp]:
     """Set up the websocket connection to Gardena's server."""
-    logger.debug("setting up websocket")
+    logger.debug(f"authenticating websocket with {AUTHENTICATION_HOST}")
 
     payload = {'grant_type': 'client_credentials', 'client_id': API_KEY, 'client_secret': API_SECRET}
 
@@ -434,7 +435,7 @@ def init_websocket() -> Optional[websocket.WebSocketApp]:
         "Authorization": "Bearer " + auth_token
     }
 
-    logger.debug("getting locations")
+    logger.debug(f"getting locations from {SMART_HOST}")
     r = requests.get(f'{SMART_HOST}/v1/locations', headers=headers)
     if r.status_code != 200:
         logger.error(f"failed to get locations, status code: {r.status_code}, {r.text}")
